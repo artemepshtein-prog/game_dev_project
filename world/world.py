@@ -100,3 +100,4 @@ class World:
                 return tile_y * TILE_SIZE
 
         return self.height * TILE_SIZE  # если земли нет
+#hello
