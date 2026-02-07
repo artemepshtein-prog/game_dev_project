@@ -42,17 +42,25 @@ class Player:
         self.gravity = 0.8
         self.jump_power = -12
         # self.on_ground = False
+        #прочност2
+        # 👇 ДОБАВЬ ЭТИ СТРОКИ В КОНЕЦ __init__
+        self.tile_health = {}  # Словарь для хранения HP сломанных блоков
+        self.max_hp = {1: 10, 2: 20}  # Прочность: ID 1 (10 ударов), ID 2 (20 ударов)
+        self.dig_cooldown = 0
 
 
     def update(self, world):
         self.handle_input()
+        self.dig(world)
 
         # Горизонтальное движение
         self.rect.x += self.vel_x
+        self.check_wall_collisions(world, self.vel_x)
 
         # Вертикальное движение
         self.vel_y += self.gravity
         self.rect.y += self.vel_y
+        self.check_floor_collisions(world)
 
         # Проверяем землю (коллизии)
         tile_x = self.rect.centerx // TILE_SIZE
@@ -96,6 +104,42 @@ class Player:
             self.vel_y = self.jump_power
             self.on_ground = False
 
+    def check_wall_collisions(self, world, direction):
+        # Находим границы игрока в тайлах
+        tile_x_left = self.rect.left // TILE_SIZE
+        tile_x_right = (self.rect.right - 1) // TILE_SIZE
+        tile_y_top = self.rect.top // TILE_SIZE
+        tile_y_bottom = (self.rect.bottom - 1) // TILE_SIZE
+
+        # Проверяем все тайлы, которых касается игрок по высоте
+        for ty in range(tile_y_top, tile_y_bottom + 1):
+            for tx in range(tile_x_left, tile_x_right + 1):
+                if 0 <= tx < world.width and 0 <= ty < world.height:
+                    if world.map[ty][tx] in (1, 2):  # Если там блок
+                        if direction > 0:  # Шли вправо
+                            self.rect.right = tx * TILE_SIZE
+                        elif direction < 0:  # Шли влево
+                            self.rect.left = (tx + 1) * TILE_SIZE
+
+    def check_floor_collisions(self, world):
+        tile_x_left = self.rect.left // TILE_SIZE
+        tile_x_right = (self.rect.right - 1) // TILE_SIZE
+        tile_y_bottom = (self.rect.bottom - 1) // TILE_SIZE
+        tile_y_top = self.rect.top // TILE_SIZE
+
+        # Проверяем тайлы под игроком (и над ним для потолка)
+        for tx in range(tile_x_left, tile_x_right + 1):
+            for ty in range(tile_y_top, tile_y_bottom + 1):
+                if 0 <= tx < world.width and 0 <= ty < world.height:
+                    if world.map[ty][tx] in (1, 2):
+                        if self.vel_y > 0:  # Падаем вниз
+                            self.rect.bottom = ty * TILE_SIZE
+                            self.vel_y = 0
+                            self.on_ground = True
+                        elif self.vel_y < 0:  # Бьемся головой
+                            self.rect.top = (ty + 1) * TILE_SIZE
+                            self.vel_y = 0
+
 
 
     def check_collision(self, world, dx, dy):
@@ -119,5 +163,63 @@ class Player:
                     else:
                         self.on_ground = False
 
+    def dig(self, world):
+            keys = pygame.key.get_pressed()
+
+            if self.dig_cooldown > 0:
+                self.dig_cooldown -= 1
+                return
+
+            # 1. Сначала определяем, КУДА мы хотим копать
+            target_tile = None
+
+            if keys[pygame.K_s]:  # ВНИЗ
+                tx = self.rect.centerx // TILE_SIZE
+                ty = (self.rect.bottom + 5) // TILE_SIZE  # +5 пикселей вниз от ног
+                target_tile = (tx, ty)
+            if keys[pygame.K_w]:  # ВВЕРХ
+                tx = self.rect.centerx // TILE_SIZE
+                ty = (self.rect.top - 5) // TILE_SIZE  # -5 пикселей вверх от головы
+                target_tile = (tx, ty)
+
+            if keys[pygame.K_e]:  # ВПРАВО (Проверь, что кнопка именно E)
+                tx = (self.rect.right + 5) // TILE_SIZE  # +5 пикселей вправо от края
+                ty = self.rect.centery // TILE_SIZE
+                target_tile = (tx, ty)
+
+            if keys[pygame.K_q]:  # ВЛЕВО
+                tx = (self.rect.left - 5) // TILE_SIZE  # -5 пикселей влево от края
+                ty = self.rect.centery // TILE_SIZE
+                target_tile = (tx, ty)
+
+            # 2. Если кнопка нажата и цель определена
+            if target_tile:
+                target_x, target_y = target_tile
+
+                # Проверка границ карты
+                if 0 <= target_x < world.width and 0 <= target_y < world.height:
+                    tile_id = world.map[target_y][target_x]
+
+                    # Тот самый отладочный принт (если его нет, значит мы не тут)
+                    print(f"Пытаюсь копать: {target_x}:{target_y}, Блок ID: {tile_id}")
+
+                    if tile_id in (1, 2):
+                        pos = (target_x, target_y)
+
+                        if pos not in world.tile_health:
+                            world.tile_health[pos] = world.max_hp.get(tile_id, 10)
+
+                        world.tile_health[pos] -= 1
+                        self.dig_cooldown = 12
+
+                        if world.tile_health[pos] <= 0:
+                            world.map[target_y][target_x] = 0
+                            if pos in world.tile_health:
+                                del world.tile_health[pos]
+                            print("УНИЧТОЖЕНО!")
+                    else:
+                        print(f"Пытаюсь копать воздух в {target_tile}")
+
     def draw(self, screen):
         screen.blit(self.image,  self.rect)
+#hello

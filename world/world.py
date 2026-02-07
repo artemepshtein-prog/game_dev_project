@@ -76,6 +76,9 @@ class World:
             3: pygame.image.load("assets/tiles/spawnpoint.png").convert_alpha(),
         }
 
+        self.tile_health = {}  # Словарь для хранения HP сломанных блоков
+        self.max_hp = {1: 10, 2: 20}  # Прочность: ID 1 (10 ударов), ID 2 (20 ударов)
+
     def draw(self, screen):
         for y in range(self.height):
             for x in range(self.width):
