@@ -9,14 +9,15 @@ class Player:
         self.x = 0
         self.y = 0
         # Загружаем спрайт
-        self.image = (pygame.image.load("assets/tiles/main_hero (2).png")
-                      .convert_alpha())
-        # Опционально масштабируем, чтобы точно 16×16
-        self.image = pygame.transform.scale(self.image, (TILE_SIZE, TILE_SIZE)
-                                            )
+        self.original_image = pygame.image.load("assets/tiles/hero.png").convert_alpha()
+        self.image = self.original_image
         self.rect = self.image.get_rect()
-        self.rect.x = 64
-        self.rect.y = 0
+
+        # Переменная направления (True - вправо, False - влево)
+        self.facing_right = True
+
+        self.rect.x = 5 * TILE_SIZE
+        self.rect.y = 5 * TILE_SIZE
         tile_x = self.rect.centerx // TILE_SIZE
         tile_y = self.rect.bottom // TILE_SIZE
         # self.velocity_y = 0  # скорость падения
@@ -30,11 +31,6 @@ class Player:
         #self.rect = self.image.get_rect()
         #spawn_x = self.world.width // 2#
 
-        for y in range(world.height):
-            if world.map[y][tile_x] != 0:
-                self.rect.x = tile_x * TILE_SIZE
-                self.rect.bottom = y * TILE_SIZE
-                break
 
         self.vel_x = 0
         self.vel_y = 0
@@ -48,58 +44,48 @@ class Player:
         self.max_hp = {1: 10, 2: 20}  # Прочность: ID 1 (10 ударов), ID 2 (20 ударов)
         self.dig_cooldown = 0
 
-
     def update(self, world):
         self.handle_input()
         self.dig(world)
 
-        # Горизонтальное движение
+        # 1. Движение по X и коллизии со стенами
         self.rect.x += self.vel_x
         self.check_wall_collisions(world, self.vel_x)
 
-        # Вертикальное движение
+        # 2. Движение по Y (Гравитация) и коллизии с полом/потолком
         self.vel_y += self.gravity
         self.rect.y += self.vel_y
         self.check_floor_collisions(world)
 
-        # Проверяем землю (коллизии)
-        tile_x = self.rect.centerx // TILE_SIZE
-        tile_y = self.rect.bottom // TILE_SIZE
-
-        if tile_y < world.height:
-            tile_id = world.map[tile_y][tile_x]
-            if tile_id in (1, 2):  # песок
-                self.rect.bottom = tile_y * TILE_SIZE
-                self.vel_y = 0
-                self.on_ground = True
-            else:
-                self.on_ground = False
-
-
-        if self.x >= SCREEN_WIDTH and self.y >= SCREEN_HEIGHT:
-            self.x = 0
-            self.y = 0
-            self.rect.x = 0
-
-
-        if tile_y < self.world.height and tile_x < world.width:
-            tile_id = self.world.map[tile_y][tile_x]
-            if tile_id in (1, 2):  # если есть песок
-                self.rect.bottom = tile_y * TILE_SIZE
-                self.vel_y = 0
-                self.on_ground = True
-            else:
-                self.on_ground = False
-        #print(self.x, self.y)
+        # 3. Границы мира (чтобы не уйти за край)
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.right > world.width * TILE_SIZE:
+            self.rect.right = world.width * TILE_SIZE
+        if self.rect.top < 0:
+            self.rect.top = 0
+        if self.rect.bottom > world.height * TILE_SIZE:
+            self.rect.bottom = world.height * TILE_SIZE
+            self.vel_y = 0
+            self.on_ground = True
 
     def handle_input(self):
         keys = pygame.key.get_pressed()
-        self.vel_x = 0
+        self.vel_x = 0  # Сбрасываем скорость каждый кадр
 
         if keys[pygame.K_a]:
             self.vel_x = -self.speed
-        if keys[pygame.K_d]:
+            self.facing_right = False
+        elif keys[pygame.K_d]:
             self.vel_x = self.speed
+            self.facing_right = True
+
+        # Обновляем картинку (flip)
+        if not self.facing_right:
+            self.image = pygame.transform.flip(self.original_image, True, False)
+        else:
+            self.image = self.original_image
+
         if keys[pygame.K_SPACE] and self.on_ground:
             self.vel_y = self.jump_power
             self.on_ground = False
@@ -191,6 +177,7 @@ class Player:
                 tx = (self.rect.left - 5) // TILE_SIZE  # -5 пикселей влево от края
                 ty = self.rect.centery // TILE_SIZE
                 target_tile = (tx, ty)
+                pygame.transform.flip(self.image, True, False)
 
             # 2. Если кнопка нажата и цель определена
             if target_tile:
